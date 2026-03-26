@@ -43,22 +43,22 @@ spl_autoload_register(function (string $class): void {
 });
 
 Env::load(__DIR__ . '/.env');
-(new UserRepository())->createAdminIfMissing();
 
 /*
 |--------------------------------------------------------------------------
 | CORS
 |--------------------------------------------------------------------------
 */
-$allowedOriginsRaw = env('CORS_ALLOWED_ORIGINS', '*');
-$allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $allowedOriginsRaw))));
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$allowAllOrigins = in_array('*', $allowedOrigins, true);
+$allowedOrigins = [
+    'https://www.autenticafashionf.store',
+    'https://autenticafashionf.store',
+    'http://localhost:5173',
+];
 
-if ($allowAllOrigins) {
-    header('Access-Control-Allow-Origin: *');
-} elseif ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
-    header('Access-Control-Allow-Origin: ' . $origin);
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+
+if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
+    header("Access-Control-Allow-Origin: {$origin}");
     header('Vary: Origin');
     header('Access-Control-Allow-Credentials: true');
 }
@@ -67,11 +67,28 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Max-Age: 86400');
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     http_response_code(204);
     exit;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Bootstrap
+|--------------------------------------------------------------------------
+*/
+try {
+    (new UserRepository())->createAdminIfMissing();
+} catch (Throwable $e) {
+    Response::error('Erro ao inicializar admin: ' . $e->getMessage(), 500);
+    exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Routes
+|--------------------------------------------------------------------------
+*/
 $router = new Router();
 
 $router->add('GET', '/api/health', [HealthController::class, 'index']);
@@ -115,6 +132,11 @@ $router->add('DELETE', '/api/admin/coupons/{id}', [CouponController::class, 'des
 
 $router->add('POST', '/api/admin/uploads', [UploadController::class, 'store'], [AdminMiddleware::class]);
 
+/*
+|--------------------------------------------------------------------------
+| Dispatch
+|--------------------------------------------------------------------------
+*/
 try {
     $router->dispatch(new Request());
 } catch (Throwable $e) {
