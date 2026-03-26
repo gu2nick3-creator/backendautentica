@@ -1,0 +1,141 @@
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  email VARCHAR(180) NOT NULL UNIQUE,
+  phone VARCHAR(30) NULL,
+  cpf_cnpj VARCHAR(30) NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('client','admin') NOT NULL DEFAULT 'client',
+  street VARCHAR(180) NULL,
+  number VARCHAR(40) NULL,
+  complement VARCHAR(120) NULL,
+  neighborhood VARCHAR(120) NULL,
+  city VARCHAR(120) NULL,
+  state VARCHAR(120) NULL,
+  zip VARCHAR(20) NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS categories (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  image_url TEXT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS subcategories (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  category_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_subcategories_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS products (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  sku VARCHAR(80) NULL,
+  name VARCHAR(180) NOT NULL,
+  description TEXT NULL,
+  category VARCHAR(120) NULL,
+  subcategory VARCHAR(120) NULL,
+  price_normal DECIMAL(10,2) NOT NULL DEFAULT 0,
+  price_resale DECIMAL(10,2) NOT NULL DEFAULT 0,
+  stock INT NOT NULL DEFAULT 0,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  featured TINYINT(1) NOT NULL DEFAULT 0,
+  is_new TINYINT(1) NOT NULL DEFAULT 0,
+  is_popular TINYINT(1) NOT NULL DEFAULT 0,
+  type ENUM('roupas','sapatos') NOT NULL DEFAULT 'sapatos',
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS product_sizes (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  product_id BIGINT UNSIGNED NOT NULL,
+  size_label VARCHAR(40) NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_product_sizes_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS product_colors (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  product_id BIGINT UNSIGNED NOT NULL,
+  color_name VARCHAR(80) NOT NULL,
+  color_hex VARCHAR(20) NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_product_colors_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS product_images (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  product_id BIGINT UNSIGNED NOT NULL,
+  image_url TEXT NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_product_images_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS coupons (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(80) NOT NULL UNIQUE,
+  type ENUM('percentage','value') NOT NULL,
+  discount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  valid_until DATE NULL,
+  max_uses INT NOT NULL DEFAULT 0,
+  current_uses INT NOT NULL DEFAULT 0,
+  uses_per_client INT NOT NULL DEFAULT 1,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS orders (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NULL,
+  customer_name VARCHAR(180) NOT NULL,
+  customer_email VARCHAR(180) NOT NULL,
+  customer_phone VARCHAR(30) NULL,
+  street VARCHAR(180) NULL,
+  number VARCHAR(40) NULL,
+  complement VARCHAR(120) NULL,
+  neighborhood VARCHAR(120) NULL,
+  city VARCHAR(120) NULL,
+  state VARCHAR(120) NULL,
+  zip VARCHAR(20) NULL,
+  price_type ENUM('normal','resale') NOT NULL DEFAULT 'normal',
+  subtotal DECIMAL(10,2) NOT NULL DEFAULT 0,
+  discount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total DECIMAL(10,2) NOT NULL DEFAULT 0,
+  coupon_code VARCHAR(80) NULL,
+  status ENUM('em_analise','em_preparo','pago','enviado','entregue','cancelado') NOT NULL DEFAULT 'em_analise',
+  tracking_code VARCHAR(100) NULL,
+  carrier VARCHAR(120) NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS order_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  order_id BIGINT UNSIGNED NOT NULL,
+  product_id BIGINT UNSIGNED NULL,
+  product_name VARCHAR(180) NOT NULL,
+  product_sku VARCHAR(80) NULL,
+  price_type ENUM('normal','resale') NOT NULL DEFAULT 'normal',
+  unit_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  quantity INT NOT NULL DEFAULT 1,
+  selected_color VARCHAR(80) NULL,
+  size_distribution_json JSON NULL,
+  image_url TEXT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
