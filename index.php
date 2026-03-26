@@ -84,6 +84,22 @@ try {
     exit;
 }
 
+$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+
+if (str_starts_with($uri, '/uploads/')) {
+    $filePath = __DIR__ . $uri;
+
+    if (is_file($filePath)) {
+        $mime = mime_content_type($filePath) ?: 'application/octet-stream';
+        header('Content-Type: ' . $mime);
+        readfile($filePath);
+        exit;
+    }
+
+    http_response_code(404);
+    exit('Arquivo não encontrado');
+}
+
 /*
 |--------------------------------------------------------------------------
 | Routes
