@@ -10,4 +10,4 @@ RUN mkdir -p uploads
 
 EXPOSE 10000
 
-CMD sh -c "php -S 0.0.0.0:${PORT:-10000} index.php"
+CMD sh -c "php -S 0.0.0.0:${PORT:-10000} -t /app /app/index.php"
