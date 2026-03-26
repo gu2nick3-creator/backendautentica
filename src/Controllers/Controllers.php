@@ -421,16 +421,27 @@ class UploadController extends BaseController
             Response::error('Formato inválido', 422);
         }
 
-        if (!is_dir(base_path('public/uploads'))) {
-            mkdir(base_path('public/uploads'), 0777, true);
+        $uploadDir = base_path('uploads');
+
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
         }
 
         $name = uniqid('img_', true) . '.' . $ext;
-        move_uploaded_file($file['tmp_name'], base_path('public/uploads/' . $name));
+        $destination = $uploadDir . DIRECTORY_SEPARATOR . $name;
+
+        if (!move_uploaded_file($file['tmp_name'], $destination)) {
+            Response::error('Não foi possível salvar o arquivo', 500);
+        }
 
         $base = rtrim((string) env('APP_URL', ''), '/');
         $url = $base !== '' ? $base . '/uploads/' . $name : '/uploads/' . $name;
 
-        Response::ok(['url' => $url], 201);
+        Response::ok([
+            'url' => $url,
+            'image' => $url,
+            'image_url' => $url,
+        ], 201);
     }
 }
+
