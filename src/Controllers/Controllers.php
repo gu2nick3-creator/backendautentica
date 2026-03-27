@@ -444,4 +444,3 @@ class UploadController extends BaseController
         ], 201);
     }
 }
-
