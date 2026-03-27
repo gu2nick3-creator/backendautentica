@@ -10,6 +10,7 @@ use App\Controllers\{
     CustomerController,
     HealthController,
     OrderController,
+    PaymentController,
     ProductController,
     UploadController
 };
@@ -109,6 +110,9 @@ $router->add('GET', '/api/products/{id}', [ProductController::class, 'show']);
 $router->add('POST', '/api/coupons/validate', [CouponController::class, 'validate']);
 $router->add('GET', '/api/orders/my', [OrderController::class, 'myOrders'], [AuthMiddleware::class]);
 $router->add('POST', '/api/orders', [OrderController::class, 'store'], [AuthMiddleware::class]);
+
+$router->add('POST', '/api/payments/infinitepay/create-checkout', [PaymentController::class, 'createInfinitePayCheckout'], [AuthMiddleware::class]);
+$router->add('POST', '/api/payments/infinitepay/webhook', [PaymentController::class, 'infinitePayWebhook']);
 
 $router->add('GET', '/api/admin/dashboard', [AdminController::class, 'dashboard'], [AdminMiddleware::class]);
 $router->add('GET', '/api/admin/products', [ProductController::class, 'index'], [AdminMiddleware::class]);
