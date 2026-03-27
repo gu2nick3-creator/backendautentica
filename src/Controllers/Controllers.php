@@ -7,6 +7,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Repositories\{UserRepository, CategoryRepository, ProductRepository, CouponRepository, OrderRepository};
 use App\Services\JwtService;
+use CURLFile;
 
 class BaseController
 {
@@ -409,7 +410,7 @@ class UploadController extends BaseController
             Response::error('Arquivo acima do limite', 422);
         }
 
-        $mime = mime_content_type($file['tmp_name']);
+        $mime = mime_content_type($file['tmp_name']) ?: '';
         $ext = match ($mime) {
             'image/jpeg' => 'jpg',
             'image/png' => 'png',
@@ -421,21 +422,63 @@ class UploadController extends BaseController
             Response::error('Formato inválido', 422);
         }
 
-        $uploadDir = base_path('uploads');
+        $cloudName = trim((string) env('CLOUDINARY_CLOUD_NAME', ''));
+        $apiKey = trim((string) env('CLOUDINARY_API_KEY', ''));
+        $apiSecret = trim((string) env('CLOUDINARY_API_SECRET', ''));
 
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0777, true);
+        if ($cloudName === '' || $apiKey === '' || $apiSecret === '') {
+            Response::error('Cloudinary não configurado no .env', 500);
         }
 
-        $name = uniqid('img_', true) . '.' . $ext;
-        $destination = $uploadDir . DIRECTORY_SEPARATOR . $name;
+        $timestamp = time();
+        $folder = trim((string) env('CLOUDINARY_FOLDER', 'autenticafashionf'));
+        $signatureBase = "folder={$folder}&timestamp={$timestamp}{$apiSecret}";
+        $signature = sha1($signatureBase);
 
-        if (!move_uploaded_file($file['tmp_name'], $destination)) {
-            Response::error('Não foi possível salvar o arquivo', 500);
+        $endpoint = "https://api.cloudinary.com/v1_1/{$cloudName}/image/upload";
+
+        $postFields = [
+            'file' => new CURLFile(
+                $file['tmp_name'],
+                $mime,
+                $file['name'] ?? ('upload.' . $ext)
+            ),
+            'api_key' => $apiKey,
+            'timestamp' => (string) $timestamp,
+            'folder' => $folder,
+            'signature' => $signature,
+        ];
+
+        $ch = curl_init($endpoint);
+
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POSTFIELDS => $postFields,
+            CURLOPT_TIMEOUT => 60,
+        ]);
+
+        $raw = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($raw === false || $curlErr !== '') {
+            Response::error('Falha ao enviar imagem para o Cloudinary: ' . $curlErr, 500);
         }
 
-        $base = rtrim((string) env('APP_URL', ''), '/');
-        $url = $base !== '' ? $base . '/uploads/' . $name : '/uploads/' . $name;
+        $json = json_decode((string) $raw, true);
+
+        if (!is_array($json)) {
+            Response::error('Resposta inválida do Cloudinary', 500);
+        }
+
+        if ($httpCode >= 400 || empty($json['secure_url'])) {
+            $msg = $json['error']['message'] ?? 'Falha no upload para o Cloudinary';
+            Response::error($msg, 500);
+        }
+
+        $url = (string) $json['secure_url'];
 
         Response::ok([
             'url' => $url,
