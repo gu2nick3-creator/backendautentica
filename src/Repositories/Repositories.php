@@ -19,17 +19,44 @@ class CategoryRepository {
     public function delete(int|string $id): bool { $s=Database::connection()->prepare('DELETE FROM categories WHERE id=:id'); return $s->execute(['id'=>$id]); }
     private function syncSub(int $id, array $items): void { Database::connection()->prepare('DELETE FROM subcategories WHERE category_id=:id')->execute(['id'=>$id]); $s=Database::connection()->prepare('INSERT INTO subcategories (category_id,name,created_at,updated_at) VALUES (:id,:name,NOW(),NOW())'); foreach ($items as $it) { $name=is_array($it)?($it['name']??''):(string)$it; if (trim($name)!=='') $s->execute(['id'=>$id,'name'=>trim($name)]); } }
 }
+private function mapProduct(array $row): array
+{
+    $images = [];
 
-class ProductRepository {
-    public function all(array $f=[]): array { $sql='SELECT * FROM products WHERE 1=1'; $p=[]; if ($f['active']!==null && $f['active']!=='') { $sql.=' AND active=:active'; $p['active']=(int)$f['active']; } if (!empty($f['category'])) { $sql.=' AND category=:category'; $p['category']=$f['category']; } if (!empty($f['search'])) { $sql.=' AND (name LIKE :search OR sku LIKE :search)'; $p['search']='%'.$f['search'].'%'; } $sql.=' ORDER BY id DESC'; $s=Database::connection()->prepare($sql); $s->execute($p); return array_map([$this,'map'],$s->fetchAll()); }
-    public function find(int|string $id): ?array { $s=Database::connection()->prepare('SELECT * FROM products WHERE id=:id LIMIT 1'); $s->execute(['id'=>$id]); $r=$s->fetch(); return $r ? $this->map($r) : null; }
-    public function create(array $d): int { $s=Database::connection()->prepare('INSERT INTO products (sku,name,description,category,subcategory,price_normal,price_resale,stock,active,featured,is_new,is_popular,type,created_at,updated_at) VALUES (:sku,:name,:description,:category,:subcategory,:pn,:pr,:stock,:active,:featured,:new,:popular,:type,NOW(),NOW())'); $s->execute(['sku'=>$d['sku']??'','name'=>$d['name'],'description'=>$d['description']??'','category'=>$d['category']??'','subcategory'=>$d['subcategory']??'','pn'=>(float)($d['priceNormal']??$d['price_normal']??0),'pr'=>(float)($d['priceResale']??$d['price_resale']??0),'stock'=>(int)($d['stock']??0),'active'=>!empty($d['active'])?1:0,'featured'=>!empty($d['featured'])?1:0,'new'=>!empty($d['isNew'])?1:0,'popular'=>!empty($d['isPopular'])?1:0,'type'=>$d['type']??'sapatos']); $id=(int)Database::connection()->lastInsertId(); $this->sync($id,$d); return $id; }
-    public function update(int|string $id, array $d): bool { $s=Database::connection()->prepare('UPDATE products SET sku=:sku,name=:name,description=:description,category=:category,subcategory=:subcategory,price_normal=:pn,price_resale=:pr,stock=:stock,active=:active,featured=:featured,is_new=:new,is_popular=:popular,type=:type,updated_at=NOW() WHERE id=:id'); $ok=$s->execute(['id'=>$id,'sku'=>$d['sku']??'','name'=>$d['name'],'description'=>$d['description']??'','category'=>$d['category']??'','subcategory'=>$d['subcategory']??'','pn'=>(float)($d['priceNormal']??$d['price_normal']??0),'pr'=>(float)($d['priceResale']??$d['price_resale']??0),'stock'=>(int)($d['stock']??0),'active'=>!empty($d['active'])?1:0,'featured'=>!empty($d['featured'])?1:0,'new'=>!empty($d['isNew'])?1:0,'popular'=>!empty($d['isPopular'])?1:0,'type'=>$d['type']??'sapatos']); $this->sync((int)$id,$d); return $ok; }
-    public function delete(int|string $id): bool { $s=Database::connection()->prepare('DELETE FROM products WHERE id=:id'); return $s->execute(['id'=>$id]); }
-    public function appendImage(int|string $productId, string $url, int $sortOrder=0): void { $s=Database::connection()->prepare('INSERT INTO product_images (product_id,image_url,sort_order,created_at,updated_at) VALUES (:product,:url,:sort,NOW(),NOW())'); $s->execute(['product'=>$productId,'url'=>$url,'sort'=>$sortOrder]); }
-    private function sync(int $id, array $d): void { $pdo=Database::connection(); $pdo->prepare('DELETE FROM product_sizes WHERE product_id=:id')->execute(['id'=>$id]); $pdo->prepare('DELETE FROM product_colors WHERE product_id=:id')->execute(['id'=>$id]); if (isset($d['images'])) $pdo->prepare('DELETE FROM product_images WHERE product_id=:id')->execute(['id'=>$id]); $ss=$pdo->prepare('INSERT INTO product_sizes (product_id,size_label,created_at,updated_at) VALUES (:id,:label,NOW(),NOW())'); foreach (($d['sizes']??[]) as $size) if (trim((string)$size)!=='') $ss->execute(['id'=>$id,'label'=>trim((string)$size)]); $sc=$pdo->prepare('INSERT INTO product_colors (product_id,color_name,color_hex,created_at,updated_at) VALUES (:id,:name,:hex,NOW(),NOW())'); foreach (($d['colors']??[]) as $color) { $name=is_array($color)?($color['name']??''):(string)$color; if (trim($name)!=='') $sc->execute(['id'=>$id,'name'=>trim($name),'hex'=>is_array($color)?($color['hex']??''):'']); } if (isset($d['images'])) { $si=$pdo->prepare('INSERT INTO product_images (product_id,image_url,sort_order,created_at,updated_at) VALUES (:id,:url,:sort,NOW(),NOW())'); foreach (($d['images']??[]) as $i=>$img) if (trim((string)$img)!=='') $si->execute(['id'=>$id,'url'=>trim((string)$img),'sort'=>$i]); } }
-    private function map(array $r): array { $pdo=Database::connection(); $s=$pdo->prepare('SELECT size_label FROM product_sizes WHERE product_id=:id ORDER BY id ASC'); $s->execute(['id'=>$r['id']]); $sizes=array_map(fn($x)=>$x['size_label'],$s->fetchAll()); $c=$pdo->prepare('SELECT color_name AS name, color_hex AS hex FROM product_colors WHERE product_id=:id ORDER BY id ASC'); $c->execute(['id'=>$r['id']]); $i=$pdo->prepare('SELECT image_url FROM product_images WHERE product_id=:id ORDER BY sort_order ASC, id ASC'); $i->execute(['id'=>$r['id']]); return ['id'=>(string)$r['id'],'sku'=>$r['sku']??'','name'=>$r['name'],'description'=>$r['description']??'','category'=>$r['category']??'','subcategory'=>$r['subcategory']??'','priceNormal'=>(float)$r['price_normal'],'priceResale'=>(float)$r['price_resale'],'stock'=>(int)$r['stock'],'active'=>(bool)$r['active'],'featured'=>(bool)$r['featured'],'isNew'=>(bool)$r['is_new'],'isPopular'=>(bool)$r['is_popular'],'type'=>$r['type'],'sizes'=>$sizes,'colors'=>$c->fetchAll(),'images'=>array_map(fn($x)=>$x['image_url'],$i->fetchAll())]; }
-}
+    if (!empty($row['gallery_json'])) {
+        $decoded = json_decode((string) $row['gallery_json'], true);
+        if (is_array($decoded)) {
+            $images = $decoded;
+        }
+    }
+
+    if (empty($images) && !empty($row['image_url'])) {
+        $images = [(string) $row['image_url']];
+    }
+
+    $mainImage = $images[0] ?? ($row['image_url'] ?? '');
+
+    return [
+        'id' => (string) $row['id'],
+        'sku' => $row['sku'] ?? '',
+        'name' => $row['name'] ?? '',
+        'description' => $row['description'] ?? '',
+        'category' => $row['category'] ?? '',
+        'subcategory' => $row['subcategory'] ?? '',
+        'priceNormal' => (float)($row['price_normal'] ?? $row['price'] ?? 0),
+        'priceResale' => (float)($row['price_resale'] ?? $row['resale_price'] ?? 0),
+        'stock' => (int)($row['stock'] ?? 0),
+        'active' => (bool)($row['active'] ?? $row['is_active'] ?? 0),
+        'featured' => (bool)($row['featured'] ?? $row['is_featured'] ?? 0),
+        'isNew' => (bool)($row['is_new'] ?? 0),
+        'isPopular' => (bool)($row['is_popular'] ?? $row['popular'] ?? 0),
+        'type' => $row['type'] ?? $row['product_type'] ?? '',
+        'sizes' => !empty($row['sizes_json']) ? (json_decode((string)$row['sizes_json'], true) ?: []) : [],
+        'colors' => !empty($row['colors_json']) ? (json_decode((string)$row['colors_json'], true) ?: []) : [],
+        'images' => $images,
+        'image' => $mainImage,
+        'image_url' => $mainImage,
+    ];
 
 class CouponRepository {
     public function all(): array { $rows=Database::connection()->query('SELECT * FROM coupons ORDER BY id DESC')->fetchAll(); return array_map([$this,'map'],$rows); }
