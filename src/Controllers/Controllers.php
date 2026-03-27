@@ -392,6 +392,124 @@ class AdminController extends BaseController
     }
 }
 
+class PaymentController extends BaseController
+{
+    public function createInfinitePayCheckout(Request $r, array $p): void
+    {
+        $d = $r->input();
+
+        $items = $d['items'] ?? [];
+        if (!is_array($items) || empty($items)) {
+            Response::error('Itens do pedido são obrigatórios', 422);
+        }
+
+        $customer = $d['customer'] ?? [];
+        $customerName = trim((string)($customer['name'] ?? ''));
+        $customerEmail = trim((string)($customer['email'] ?? ''));
+        $customerPhone = trim((string)($customer['phone_number'] ?? ''));
+
+        if ($customerName === '' || $customerEmail === '' || $customerPhone === '') {
+            Response::error('Dados do cliente são obrigatórios', 422);
+        }
+
+        $payloadItems = [];
+        foreach ($items as $item) {
+            $quantity = (int)($item['quantity'] ?? 0);
+            $price = (float)($item['price'] ?? 0);
+            $description = trim((string)($item['description'] ?? ''));
+
+            if ($quantity <= 0 || $price <= 0 || $description === '') {
+                Response::error('Item inválido no pedido', 422);
+            }
+
+            $payloadItems[] = [
+                'quantity' => $quantity,
+                'price' => (int) round($price * 100),
+                'description' => $description,
+            ];
+        }
+
+        $handle = trim((string)env('INFINITEPAY_HANDLE', ''));
+        $redirectUrl = trim((string)env('INFINITEPAY_REDIRECT_URL', ''));
+        $webhookUrl = trim((string)env('INFINITEPAY_WEBHOOK_URL', ''));
+        $apiBase = rtrim((string)env('INFINITEPAY_API_BASE', 'https://api.infinitepay.io'), '/');
+
+        if ($handle === '' || $redirectUrl === '' || $webhookUrl === '') {
+            Response::error('InfinitePay não configurada no .env', 500);
+        }
+
+        $orderNsu = trim((string)($d['order_nsu'] ?? ('PED-' . time())));
+
+        $payload = [
+            'handle' => $handle,
+            'redirect_url' => $redirectUrl,
+            'webhook_url' => $webhookUrl,
+            'order_nsu' => $orderNsu,
+            'items' => $payloadItems,
+            'customer' => [
+                'name' => $customerName,
+                'email' => $customerEmail,
+                'phone_number' => $customerPhone,
+            ],
+        ];
+
+        $ch = curl_init($apiBase . '/invoices/public/checkout/links');
+
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            CURLOPT_TIMEOUT => 60,
+        ]);
+
+        $raw = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($raw === false || $curlErr !== '') {
+            Response::error('Falha ao criar checkout na InfinitePay: ' . $curlErr, 500);
+        }
+
+        $json = json_decode((string)$raw, true);
+
+        if (!is_array($json)) {
+            Response::error('Resposta inválida da InfinitePay', 500);
+        }
+
+        if ($httpCode >= 400) {
+            $msg = $json['message'] ?? $json['error'] ?? 'Erro ao criar checkout da InfinitePay';
+            Response::error(is_string($msg) ? $msg : 'Erro ao criar checkout da InfinitePay', 500);
+        }
+
+        $checkoutUrl = (string)($json['url'] ?? '');
+        if ($checkoutUrl === '') {
+            Response::error('InfinitePay não retornou a URL do checkout', 500);
+        }
+
+        Response::ok([
+            'checkout_url' => $checkoutUrl,
+            'provider' => 'infinitepay',
+            'order_nsu' => $orderNsu,
+            'raw' => $json,
+        ], 201);
+    }
+
+    public function infinitePayWebhook(Request $r, array $p): void
+    {
+        $data = $r->input();
+
+        Response::ok([
+            'received' => true,
+            'payload' => $data,
+        ]);
+    }
+}
+
 class UploadController extends BaseController
 {
     public function store(Request $r, array $p): void
