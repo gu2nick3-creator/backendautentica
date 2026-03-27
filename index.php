@@ -44,11 +44,6 @@ spl_autoload_register(function (string $class): void {
 
 Env::load(__DIR__ . '/.env');
 
-/*
-|--------------------------------------------------------------------------
-| CORS
-|--------------------------------------------------------------------------
-*/
 $allowedOrigins = [
     'https://www.autenticafashionf.store',
     'https://autenticafashionf.store',
@@ -72,11 +67,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     exit;
 }
 
-/*
-|--------------------------------------------------------------------------
-| Static uploads
-|--------------------------------------------------------------------------
-*/
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
 if (str_starts_with($uri, '/uploads/')) {
@@ -95,23 +85,12 @@ if (str_starts_with($uri, '/uploads/')) {
     exit('Arquivo não encontrado');
 }
 
-/*
-|--------------------------------------------------------------------------
-| Bootstrap
-|--------------------------------------------------------------------------
-*/
 try {
     (new UserRepository())->createAdminIfMissing();
 } catch (Throwable $e) {
-    // Não quebra todas as rotas por causa do admin automático
     error_log('Bootstrap createAdminIfMissing error: ' . $e->getMessage());
 }
 
-/*
-|--------------------------------------------------------------------------
-| Routes
-|--------------------------------------------------------------------------
-*/
 $router = new Router();
 
 $router->add('GET', '/api/health', [HealthController::class, 'index']);
@@ -155,11 +134,6 @@ $router->add('DELETE', '/api/admin/coupons/{id}', [CouponController::class, 'des
 
 $router->add('POST', '/api/admin/uploads', [UploadController::class, 'store'], [AdminMiddleware::class]);
 
-/*
-|--------------------------------------------------------------------------
-| Dispatch
-|--------------------------------------------------------------------------
-*/
 try {
     $router->dispatch(new Request());
 } catch (Throwable $e) {
