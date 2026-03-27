@@ -74,17 +74,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 
 /*
 |--------------------------------------------------------------------------
-| Bootstrap
+| Static uploads
 |--------------------------------------------------------------------------
 */
-try {
-    (new UserRepository())->createAdminIfMissing();
-} catch (Throwable $e) {
-    Response::error('Erro ao inicializar admin: ' . $e->getMessage(), 500);
-    exit;
-}
-
-$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
 if (str_starts_with($uri, '/uploads/')) {
     $filePath = __DIR__ . $uri;
@@ -92,12 +85,26 @@ if (str_starts_with($uri, '/uploads/')) {
     if (is_file($filePath)) {
         $mime = mime_content_type($filePath) ?: 'application/octet-stream';
         header('Content-Type: ' . $mime);
+        header('Content-Length: ' . (string) filesize($filePath));
         readfile($filePath);
         exit;
     }
 
     http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
     exit('Arquivo não encontrado');
+}
+
+/*
+|--------------------------------------------------------------------------
+| Bootstrap
+|--------------------------------------------------------------------------
+*/
+try {
+    (new UserRepository())->createAdminIfMissing();
+} catch (Throwable $e) {
+    // Não quebra todas as rotas por causa do admin automático
+    error_log('Bootstrap createAdminIfMissing error: ' . $e->getMessage());
 }
 
 /*
